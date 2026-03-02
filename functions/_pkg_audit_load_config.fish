@@ -3,6 +3,7 @@ function _pkg_audit_load_config
     set -g _pkg_audit_names
     set -g _pkg_audit_matchers
     set -g _pkg_audit_weights
+    set -g _pkg_audit_events
 
     set -l config_files
 
@@ -35,14 +36,20 @@ function _pkg_audit_load_config
                 continue
             end
 
-            # Need exactly 3 parts: name, matcher, weight
-            if test (count $parts) -ne 3
+            # Need 3 parts (name, matcher, weight) or 4 (+ event type)
+            set -l n (count $parts)
+            if test $n -lt 3 -o $n -gt 4
                 continue
             end
 
             set -a _pkg_audit_names $parts[1]
             set -a _pkg_audit_matchers $parts[2]
             set -a _pkg_audit_weights $parts[3]
+            if test $n -eq 4
+                set -a _pkg_audit_events $parts[4]
+            else
+                set -a _pkg_audit_events other
+            end
         end <$config_file
     end
 

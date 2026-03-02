@@ -36,6 +36,7 @@ function _pkg_audit_match --argument-names cmdline
 
         if test $matched -eq 1
             set -g _pkg_audit_last_match_name $name
+            set -g _pkg_audit_last_match_event $_pkg_audit_events[$i]
             return 0
         end
     end

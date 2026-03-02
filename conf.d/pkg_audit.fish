@@ -15,7 +15,7 @@ function _pkg_audit_postexec --on-event fish_postexec
 
     # Check if command matches any pattern
     if _pkg_audit_match "$argv"
-        _pkg_audit_log $_pkg_audit_last_match_name "$argv"
+        _pkg_audit_log $_pkg_audit_last_match_name $_pkg_audit_last_match_event "$argv"
     end
 end
 
@@ -25,8 +25,9 @@ function _pkg_audit_install --on-event pkg_audit_install
     if not test -f $conf
         echo "\
 # pkg-audit matcher configuration
-# Format: source-name  'regex-or-function-or-script-path'  weight
+# Format: source-name  'matcher'  weight  event
 #
+# event is one of: install, remove, upgrade, other
 # Lines are eval'd by fish — \$variables, (commands), and ~ are expanded.
 # Matcher types (detected by convention):
 #   ^pattern  → fish regex (string match -rq)
@@ -34,71 +35,129 @@ function _pkg_audit_install --on-event pkg_audit_install
 #   name      → fish function name (called with command line as \$argv)
 #
 # When multiple matchers match, highest weight wins.
+# The event field is optional — defaults to 'other' if omitted.
 # Drop extra configs in ~/.config/fish/pkg_audit.d/*.conf
 
 # --- Debian / Ubuntu ---
-apt       '^(sudo\s+)?apt\s+(install|remove|purge|upgrade|full-upgrade|dist-upgrade|autoremove)\b'       1
-apt-get   '^(sudo\s+)?apt-get\s+(install|remove|purge|upgrade|dist-upgrade|autoremove)\b'                5
-dpkg      '^(sudo\s+)?dpkg\s+-(i|r|P|-install|-remove|-purge|-configure)\b'                              1
+apt       '^(sudo\s+)?apt\s+install\b'                                    1  install
+apt       '^(sudo\s+)?apt\s+(remove|purge|autoremove)\b'                  1  remove
+apt       '^(sudo\s+)?apt\s+(upgrade|full-upgrade|dist-upgrade)\b'        1  upgrade
+apt-get   '^(sudo\s+)?apt-get\s+install\b'                                5  install
+apt-get   '^(sudo\s+)?apt-get\s+(remove|purge|autoremove)\b'              5  remove
+apt-get   '^(sudo\s+)?apt-get\s+(upgrade|dist-upgrade)\b'                 5  upgrade
+dpkg      '^(sudo\s+)?dpkg\s+-(i|-install)\b'                             1  install
+dpkg      '^(sudo\s+)?dpkg\s+-(r|P|-remove|-purge)\b'                     1  remove
+dpkg      '^(sudo\s+)?dpkg\s+--configure\b'                               1  other
 
 # --- Snap / Flatpak ---
-snap      '^(sudo\s+)?snap\s+(install|remove|refresh|revert|enable|disable)\b'                            1
-flatpak   '^(sudo\s+)?flatpak\s+(install|uninstall|update)\b'                                             1
+snap      '^(sudo\s+)?snap\s+install\b'                                   1  install
+snap      '^(sudo\s+)?snap\s+remove\b'                                    1  remove
+snap      '^(sudo\s+)?snap\s+refresh\b'                                   1  upgrade
+snap      '^(sudo\s+)?snap\s+(revert|enable|disable)\b'                   1  other
+flatpak   '^(sudo\s+)?flatpak\s+install\b'                                1  install
+flatpak   '^(sudo\s+)?flatpak\s+uninstall\b'                              1  remove
+flatpak   '^(sudo\s+)?flatpak\s+update\b'                                 1  upgrade
 
 # --- Arch ---
-pacman    '^(sudo\s+)?pacman\s+-(S|R|U)\b'                                                                1
-yay       '^yay\s+-(S|R|U)\b'                                                                             1
-paru      '^paru\s+-(S|R|U)\b'                                                                            1
+pacman    '^(sudo\s+)?pacman\s+-(S|U)\b'                                  1  install
+pacman    '^(sudo\s+)?pacman\s+-R\b'                                      1  remove
+yay       '^yay\s+-(S|U)\b'                                               1  install
+yay       '^yay\s+-R\b'                                                   1  remove
+paru      '^paru\s+-(S|U)\b'                                              1  install
+paru      '^paru\s+-R\b'                                                  1  remove
 
 # --- Fedora / RHEL ---
-dnf       '^(sudo\s+)?dnf\s+(install|remove|upgrade|downgrade|reinstall|autoremove)\b'                    1
-yum       '^(sudo\s+)?yum\s+(install|remove|update|downgrade|reinstall|autoremove)\b'                     1
+dnf       '^(sudo\s+)?dnf\s+(install|reinstall)\b'                        1  install
+dnf       '^(sudo\s+)?dnf\s+(remove|autoremove)\b'                        1  remove
+dnf       '^(sudo\s+)?dnf\s+(upgrade|downgrade)\b'                        1  upgrade
+yum       '^(sudo\s+)?yum\s+(install|reinstall)\b'                        1  install
+yum       '^(sudo\s+)?yum\s+(remove|autoremove)\b'                        1  remove
+yum       '^(sudo\s+)?yum\s+(update|downgrade)\b'                         1  upgrade
 
 # --- openSUSE ---
-zypper    '^(sudo\s+)?zypper\s+(install|remove|update|dist-upgrade|patch)\b'                              1
+zypper    '^(sudo\s+)?zypper\s+install\b'                                 1  install
+zypper    '^(sudo\s+)?zypper\s+remove\b'                                  1  remove
+zypper    '^(sudo\s+)?zypper\s+(update|dist-upgrade|patch)\b'             1  upgrade
 
 # --- Alpine ---
-apk       '^(sudo\s+)?apk\s+(add|del|upgrade)\b'                                                          1
+apk       '^(sudo\s+)?apk\s+add\b'                                        1  install
+apk       '^(sudo\s+)?apk\s+del\b'                                        1  remove
+apk       '^(sudo\s+)?apk\s+upgrade\b'                                    1  upgrade
 
 # --- Nix ---
-nix       '^nix\s+(profile\s+install|profile\s+remove|shell|run|build)\b'                                 1
-nix-env   '^nix-env\s+-(i|e|u|iA|-install|-uninstall|-upgrade)\b'                                         1
+nix       '^nix\s+profile\s+install\b'                                    1  install
+nix       '^nix\s+profile\s+remove\b'                                     1  remove
+nix       '^nix\s+(shell|run|build)\b'                                    1  other
+nix-env   '^nix-env\s+-(i|iA|-install)\b'                                 1  install
+nix-env   '^nix-env\s+-(e|-uninstall)\b'                                  1  remove
+nix-env   '^nix-env\s+-(u|-upgrade)\b'                                    1  upgrade
 
 # --- Homebrew ---
-brew      '^brew\s+(install|uninstall|reinstall|upgrade)\b'                                                1
+brew      '^brew\s+(install|reinstall)\b'                                  1  install
+brew      '^brew\s+uninstall\b'                                           1  remove
+brew      '^brew\s+upgrade\b'                                             1  upgrade
 
 # --- Rust ---
-rustup    '^rustup\s+(toolchain\s+(install|uninstall)|component\s+(add|remove)|update|self\s+update)\b'   1
-cargo     '^cargo\s+(install|uninstall)\b'                                                                 1
+rustup    '^rustup\s+toolchain\s+install\b'                               1  install
+rustup    '^rustup\s+toolchain\s+uninstall\b'                             1  remove
+rustup    '^rustup\s+component\s+add\b'                                   1  install
+rustup    '^rustup\s+component\s+remove\b'                                1  remove
+rustup    '^rustup\s+(update|self\s+update)\b'                            1  upgrade
+cargo     '^cargo\s+install\b'                                            1  install
+cargo     '^cargo\s+uninstall\b'                                          1  remove
 
 # --- Node.js ---
-npm       '^(sudo\s+)?npm\s+(install|uninstall|update)\s+(-g|--global)\b'                                 1
-npm       '^(sudo\s+)?npm\s+(-g|--global)\s+(install|uninstall|update)\b'                                  2
-pnpm      '^(sudo\s+)?pnpm\s+(add|remove|update)\s+(-g|--global)\b'                                       1
-pnpm      '^(sudo\s+)?pnpm\s+(-g|--global)\s+(add|remove|update)\b'                                        2
-yarn      '^yarn\s+global\s+(add|remove|upgrade)\b'                                                        1
-bun       '^(sudo\s+)?bun\s+(install|add|remove)\s+(-g|--global)\b'                                        1
-bun       '^(sudo\s+)?bun\s+(-g|--global)\s+(install|add|remove)\b'                                         2
+npm       '^(sudo\s+)?npm\s+install\s+(-g|--global)\b'                    1  install
+npm       '^(sudo\s+)?npm\s+uninstall\s+(-g|--global)\b'                  1  remove
+npm       '^(sudo\s+)?npm\s+update\s+(-g|--global)\b'                     1  upgrade
+npm       '^(sudo\s+)?npm\s+(-g|--global)\s+install\b'                    2  install
+npm       '^(sudo\s+)?npm\s+(-g|--global)\s+uninstall\b'                  2  remove
+npm       '^(sudo\s+)?npm\s+(-g|--global)\s+update\b'                     2  upgrade
+pnpm      '^(sudo\s+)?pnpm\s+add\s+(-g|--global)\b'                       1  install
+pnpm      '^(sudo\s+)?pnpm\s+remove\s+(-g|--global)\b'                    1  remove
+pnpm      '^(sudo\s+)?pnpm\s+update\s+(-g|--global)\b'                    1  upgrade
+pnpm      '^(sudo\s+)?pnpm\s+(-g|--global)\s+add\b'                       2  install
+pnpm      '^(sudo\s+)?pnpm\s+(-g|--global)\s+remove\b'                    2  remove
+pnpm      '^(sudo\s+)?pnpm\s+(-g|--global)\s+update\b'                    2  upgrade
+yarn      '^yarn\s+global\s+add\b'                                        1  install
+yarn      '^yarn\s+global\s+remove\b'                                     1  remove
+yarn      '^yarn\s+global\s+upgrade\b'                                    1  upgrade
+bun       '^(sudo\s+)?bun\s+(install|add)\s+(-g|--global)\b'              1  install
+bun       '^(sudo\s+)?bun\s+remove\s+(-g|--global)\b'                     1  remove
+bun       '^(sudo\s+)?bun\s+(-g|--global)\s+(install|add)\b'              2  install
+bun       '^(sudo\s+)?bun\s+(-g|--global)\s+remove\b'                     2  remove
 
 # --- Python ---
-pip       '^(sudo\s+)?pip3?\s+install\b'                                                                   1
-uv        '^uv\s+(tool\s+install|tool\s+uninstall|pip\s+install|pip\s+uninstall)\b'                        1
-pipx      '^pipx\s+(install|uninstall|upgrade|reinstall)\b'                                                 1
+pip       '^(sudo\s+)?pip3?\s+install\b'                                  1  install
+uv        '^uv\s+(tool\s+install|pip\s+install)\b'                        1  install
+uv        '^uv\s+(tool\s+uninstall|pip\s+uninstall)\b'                    1  remove
+pipx      '^pipx\s+(install|reinstall)\b'                                  1  install
+pipx      '^pipx\s+uninstall\b'                                           1  remove
+pipx      '^pipx\s+upgrade\b'                                             1  upgrade
 
 # --- Ruby ---
-gem       '^(sudo\s+)?gem\s+(install|uninstall|update)\b'                                                  1
+gem       '^(sudo\s+)?gem\s+install\b'                                    1  install
+gem       '^(sudo\s+)?gem\s+uninstall\b'                                  1  remove
+gem       '^(sudo\s+)?gem\s+update\b'                                     1  upgrade
 
 # --- Go ---
-go        '^go\s+install\b'                                                                                 1
+go        '^go\s+install\b'                                               1  install
 
 # --- Java / JVM ---
-sdkman    '^sdk\s+(install|uninstall|upgrade|use|default)\b'                                                1
+sdkman    '^sdk\s+install\b'                                              1  install
+sdkman    '^sdk\s+uninstall\b'                                            1  remove
+sdkman    '^sdk\s+upgrade\b'                                              1  upgrade
+sdkman    '^sdk\s+(use|default)\b'                                        1  other
 
 # --- PHP ---
-composer  '^composer\s+global\s+(require|remove|update)\b'                                                  1
+composer  '^composer\s+global\s+require\b'                                1  install
+composer  '^composer\s+global\s+remove\b'                                 1  remove
+composer  '^composer\s+global\s+update\b'                                 1  upgrade
 
 # --- Fish ---
-fisher    '^fisher\s+(install|remove|update)\b'                                                             1
+fisher    '^fisher\s+install\b'                                           1  install
+fisher    '^fisher\s+remove\b'                                            1  remove
+fisher    '^fisher\s+update\b'                                            1  upgrade
 " >$conf
     end
 
@@ -120,6 +179,8 @@ function _pkg_audit_uninstall --on-event pkg_audit_uninstall
     set -e _pkg_audit_weights
     set -e _pkg_audit_sorted_indices
     set -e _pkg_audit_last_match_name
+    set -e _pkg_audit_last_match_event
+    set -e _pkg_audit_events
     # Intentionally leave config files and log — user data
 end
 

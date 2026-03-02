@@ -23,7 +23,7 @@ pkg-audit hooks into fish's `fish_postexec` event. After every command you run:
 Log entries look like:
 
 ```json
-{"ts":"2026-03-02T21:48:35","source":"apt","cmd":"sudo apt install neovim"}
+{"ts":"2026-03-02T21:48:35","source":"apt","event":"install","cmd":"sudo apt install neovim"}
 ```
 
 ## CLI
@@ -37,6 +37,7 @@ pkg-audit <command>
 | `log` | Show the audit log. Pretty-prints with `jq` if available and stdout is a terminal. |
 | `log --follow` | Tail the log in real time (`tail -f`). |
 | `list` | Show all loaded matchers sorted by weight (highest first). |
+| `report` | Show currently installed packages grouped by source (requires `jq`). |
 | `reload` | Reload matcher configs from disk. |
 
 Tab completions are included for all subcommands and flags.
@@ -45,7 +46,7 @@ Tab completions are included for all subcommands and flags.
 
 ### Default Config
 
-On install, pkg-audit writes a default config to `~/.config/fish/pkg_audit.conf` with 32 matchers covering:
+On install, pkg-audit writes a default config to `~/.config/fish/pkg_audit.conf` with 89 matchers covering:
 
 | Category | Sources |
 |----------|---------|
@@ -70,15 +71,16 @@ All system-level patterns handle an optional `sudo` prefix. Node.js patterns mat
 
 ### Config Format
 
-Each line in a config file has three fields:
+Each line in a config file has three or four fields:
 
 ```
-source-name  'matcher'  weight
+source-name  'matcher'  weight  [event]
 ```
 
 - **source-name** — A label for the log entry (e.g., `apt`, `brew`, `cargo`)
 - **matcher** — A regex, function name, or script path (see below)
 - **weight** — Integer priority. When multiple matchers match, highest weight wins.
+- **event** — One of `install`, `remove`, `upgrade`, or `other`. Defaults to `other` if omitted. Used by `pkg-audit report` to track what's currently installed.
 
 Lines starting with `#` and blank lines are ignored. Lines are `eval`'d by fish, so `$variables`, `(commands)`, `~`, and quoting all work.
 
@@ -100,7 +102,7 @@ Example — track Ansible playbook runs:
 
 ```fish
 # ~/.config/fish/pkg_audit.d/ansible.conf
-ansible  '^ansible-playbook\b'  1
+ansible  '^ansible-playbook\b'  1  other
 ```
 
 Then reload:
@@ -115,22 +117,23 @@ pkg-audit reload
 ~/.local/share/fish/pkg-audit.log
 ```
 
-Each line is a valid JSON object (JSONL format) with three fields:
+Each line is a valid JSON object (JSONL format) with four fields:
 
 | Field | Description |
 |-------|-------------|
 | `ts` | UTC timestamp in ISO 8601 format |
 | `source` | The source-name from the matching config entry |
+| `event` | The event type: `install`, `remove`, `upgrade`, or `other` |
 | `cmd` | The full command line as entered |
 
 You can query the log with standard tools:
 
 ```fish
-# All apt operations
-jq 'select(.source == "apt")' < ~/.local/share/fish/pkg-audit.log
+# All apt installs
+jq 'select(.source == "apt" and .event == "install")' < ~/.local/share/fish/pkg-audit.log
 
-# Commands from today
-jq 'select(.ts | startswith("2026-03-02"))' < ~/.local/share/fish/pkg-audit.log
+# All removals
+jq 'select(.event == "remove")' < ~/.local/share/fish/pkg-audit.log
 ```
 
 ## Uninstall
