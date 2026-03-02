@@ -45,16 +45,28 @@ Tab completions are included for all subcommands and flags.
 
 ### Default Config
 
-On install, pkg-audit writes a default config to `~/.config/fish/pkg_audit.conf` with matchers for common Debian/Ubuntu package managers:
+On install, pkg-audit writes a default config to `~/.config/fish/pkg_audit.conf` with 32 matchers covering:
 
-| Source | Pattern | Weight |
-|--------|---------|--------|
-| `apt` | `apt install\|remove\|purge\|upgrade\|...` | 1 |
-| `apt` | `apt-get install\|remove\|purge\|upgrade\|...` | 5 |
-| `dpkg` | `dpkg -i\|-r\|-P\|--install\|--remove\|...` | 1 |
-| `snap` | `snap install\|remove\|refresh\|revert\|...` | 1 |
+| Category | Sources |
+|----------|---------|
+| Debian/Ubuntu | `apt`, `apt-get`, `dpkg` |
+| Snap/Flatpak | `snap`, `flatpak` |
+| Arch | `pacman`, `yay`, `paru` |
+| Fedora/RHEL | `dnf`, `yum` |
+| openSUSE | `zypper` |
+| Alpine | `apk` |
+| Nix | `nix`, `nix-env` |
+| Homebrew | `brew` |
+| Rust | `rustup`, `cargo` |
+| Node.js | `npm`, `pnpm`, `yarn`, `bun` (global installs only) |
+| Python | `pip`, `uv`, `pipx` |
+| Ruby | `gem` |
+| Go | `go install` |
+| Java/JVM | `sdk` (SDKMAN) |
+| PHP | `composer global` |
+| Fish | `fisher` |
 
-All patterns handle an optional `sudo` prefix.
+All system-level patterns handle an optional `sudo` prefix. Node.js patterns match both `npm -g install` and `npm install -g` flag orderings.
 
 ### Config Format
 
@@ -84,11 +96,11 @@ The matcher type is detected by convention:
 
 Drop additional `.conf` files into `~/.config/fish/pkg_audit.d/` to add matchers without editing the default config. They use the same format.
 
-Example — add Homebrew tracking:
+Example — track Ansible playbook runs:
 
 ```fish
-# ~/.config/fish/pkg_audit.d/brew.conf
-brew  '^brew\s+(install|uninstall|upgrade|reinstall)\b'  1
+# ~/.config/fish/pkg_audit.d/ansible.conf
+ansible  '^ansible-playbook\b'  1
 ```
 
 Then reload:
